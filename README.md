@@ -16,6 +16,7 @@
 │   └── vite.config.ts        dev server 配置（open: false）
 ├── backend/                  FastAPI（Python） 后端
 │   ├── app/routers/resource.py  通用查询/导出/登记/动作接口
+│   ├── app/income/           空组出数证据：空值/无效文本/实测零的凭据台账与报告出件
 │   ├── app/services/<key>.py    每个模块独立领域逻辑
 │   ├── app/services/base.py     共享服务骨架
 │   └── app/store.py          内存数据仓库与示例数据
@@ -80,6 +81,27 @@ npm run dev
   `frontend/src/domain/<模块>.ts`，用于承载真实业务差异并维持36题位容量。
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
+
+## 空组出数证据（收入观测）
+
+`backend/app/income/` 解决「无数据可算」与「真实测得零」的凭据区分，前端入口为
+侧边栏「收入观测证据」（路由 `/income`，页面 `IncomeEvidenceView.vue`）。
+
+- 观测资格判定（`domain.py::classify_observation`）：
+  - 空值（`null`/空串/纯空白）→ 排除，原因「无可用观测（空值）」，渠道列入待补；
+  - 无法归成金额的文本 → 排除并保留原因；
+  - 数字与可解析数字串（含 `0`）→ 有效行；实测零参加金额实算并计入有效分组，
+    空数据渠道不会显示成已确认零。
+- 证据台账保留全部有效行与排除行；同一报告期凭据编号唯一，重送同一凭据只追加
+  指向首次登记的重复行，不增加有效记录、不推进范围版本。
+- 报告期范围以不可变版本快照固化；领取（claim）钉住当时版本，补记产生新版本，
+  落后版本预览会标明 `scope_conflict`，正式发布遇范围冲突返回 409，须重新领取。
+- 报告实算只从有效凭据算各渠道金额、有效渠道数与总金额；没有有效观测的渠道单列
+  待补并逐行带出排除原因。同期正式报告只保留一份，并发发布在锁内串行确认。
+- 接口前缀 `/api/income`：`evidence`（登记/台账）、`scopes`（范围版本）、
+  `claims`（领取）、`report/preview`（实算预览）、`reports/publish`（正式出件）。
+- 测试：`tests/test_income_evidence.py`（领域与并发）、
+  `tests/test_income_e2e.py`（真实 uvicorn + 标准库 HTTP 的端到端核验）。
 
 领域：数据工程
 子方向：数据分析与数据应用
